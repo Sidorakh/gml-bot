@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<head>
+    <%- include('head.ejs'); %>
+</head>
+<body>
+    <form action="/register" method="post">
+        <p>
+            <label> Email: </label> <input type="email" name="email">
+        </p>
+        <p>
+            <label> Password: </label> <input type="password" name="password">
+        </p>
+        <p>
+            <input type="submit" value="Register">
+        </p>
+    </form>
+</body>
