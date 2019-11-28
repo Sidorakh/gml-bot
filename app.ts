@@ -49,7 +49,10 @@ app.post('/bot/login',async (req,res)=>{
         success=false;
     }
     if (success) {
-        
+        const parse_command = (req.body.parse_commands ? true : false);
+        const prefix = parse_command ? req.body.command_prefix : '';
+
+        console.log(parse_command);
         message_queue_map[uuid] = message_queue;
         messages_map[uuid] = messages;
 
@@ -62,9 +65,31 @@ app.post('/bot/login',async (req,res)=>{
             if (msg.author.bot) {
                 return;
             }
+            let command_data = undefined;
+            if (parse_command) {
+                let text = msg.content;
+                if (text[0] == prefix) {
+                    text = text.slice(1);
+                    const parts = text.split(' ');
+                    const command = parts.shift();
+                    const args = parts.join(' ').match(/[^\s"']+|"([^"]*)"|'([^']*)'/g);
+                    command_data = {
+                        command:command,
+                        args:args
+                    }
+                    console.log(command_data);
+                } else {
+                    command_data = undefined;
+                }
+            }
             message_queue.push({
                 id:msg.id,
-                content:msg.content
+                in_guild: msg.guild ? true : false,
+                content:msg.content,
+                guild: msg.guild ? msg.guild.id : -4,
+                channel: msg.guild ? msg.channel.id : -4,
+                command: command_data == undefined ? false : true,
+                command_data:command_data
             });
             messages[msg.id] = msg;
     
@@ -130,8 +155,95 @@ app.post('/bot/msg/respond',async (req,res)=>{
 });
 
 
+app.get('/bot/guild/list', async (req,res)=>{
+    const client: discord.Client = client_map[req.headers.authorization];
+    if (client == undefined) {
+        return res.status(401).json({status:'failure',reason:'Unauthorized'});
+    }
+    const guild_list = {};
+    client.guilds.forEach((g:discord.Guild,k)=>{
+        guild_list[k] = {
+            id:g.id,
+            name:g.name,
+            icon:g.iconURL,
+            system_channel:g.systemChannelID
+        };
+    });
+    res.json(guild_list);
+});
 
+app.get('/bot/guild/members', async(req,res)=>{
+    res.json({status:'Not yet implemented'});
+});
 
+app.get('/bot/guild/:guild/channels', async(req,res) => {
+    const guild_id = req.params.guild;
+    const client: discord.Client = client_map[req.headers.authorization];
+    if (client == undefined) {
+        return res.status(401).json({status:'failure',reason:'Unauthorized'})
+    }
+    const guild = client.guilds.get(guild_id);
+    if (guild == null || guild == undefined) {
+        return res.status(404).json({sttus:'failure',reason:'Guild not found'});
+    }
+    const channel_list = {}
+    guild.channels.forEach((c,k)=>{
+        channel_list[k] = {
+            id:c.id,
+            name:c.name,
+            type:c.type
+        };
+    })
+    res.json(channel_list);
+});
+
+app.get('/bot/guild/:guild/channels/:channel/info',(req,res)=>{
+    const guild_id = req.params.guild;
+    const channel_id = req.params.channel;
+
+    const client: discord.Client = client_map[req.headers.authorization];
+
+    if (client == undefined) {
+        return res.status(401).json({status:'failure',reason:'Unauthorized'});
+    }
+    const guild = client.guilds.get(guild_id);
+    if (guild == null || guild == undefined) {
+        return res.status(404).json({sttus:'failure',reason:'Guild not found'});
+    }
+    const channel = guild.channels.find(c=>c.id==channel_id);
+    if (channel == null || channel == undefined) {
+        return res.status(404).json({status:'failure',reason:'Channel not found'});
+    }
+
+    return res.json({
+        id:channel.id,
+        name:channel.name
+    })
+
+});
+
+app.post('/bot/guild/:guild/channels/:channel/send',(req,res)=>{
+    const guild_id = req.params.guild;
+    const channel_id = req.params.channel;
+
+    const client: discord.Client = client_map[req.headers.authorization];
+    if (client == undefined) {
+        return res.status(401).json({status:'failure',reason:'Unauthorized'});
+    }
+    const guild = client.guilds.get(guild_id);
+    if (guild == null || guild == undefined) {
+        return res.status(404).json({sttus:'failure',reason:'Guild not found'});
+    }
+    const channel: discord.GuildChannel = guild.channels.find(c=>c.id==channel_id);
+    if (channel == null || channel == undefined) {
+        return res.status(404).json({status:'failure',reason:'Channel not found'});
+    }
+
+    const msg = req.body.msg;
+    //@ts-ignore
+    channel.send(msg);
+    return res.json({status:'success'});
+});
 
 
 
